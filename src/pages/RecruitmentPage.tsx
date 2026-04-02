@@ -152,10 +152,7 @@ export default function RecruitmentPage() {
                     </TableCell>
                     <TableCell className="text-sm">{c.role}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={cn("font-semibold text-xs", getScoreBadgeVariant(c.matchScore))}>
-                        <Star className="h-3 w-3 mr-1" />
-                        {c.matchScore}%
-                      </Badge>
+                      <CircularScore score={c.matchScore} />
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={cn("text-xs", getStatusVariant(c.status))}>

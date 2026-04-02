@@ -71,7 +71,25 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 space-y-2">
+        {!collapsed && (
+          <div className="rounded-xl bg-sidebar-accent p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-sidebar-foreground">Leave Balance</span>
+              <span className="text-xs text-sidebar-muted">15/20</span>
+            </div>
+            <div className="h-2 rounded-full bg-sidebar-border overflow-hidden">
+              <div className="h-full rounded-full bg-sidebar-primary transition-all" style={{ width: "75%" }} />
+            </div>
+            <p className="text-[10px] text-sidebar-muted">5 days used · 15 remaining</p>
+          </div>
+        )}
+        {collapsed && (
+          <div className="flex flex-col items-center gap-0.5 py-1" title="Leave: 15/20 days">
+            <CalendarDays className="h-4 w-4 text-sidebar-muted" />
+            <span className="text-[10px] font-medium text-sidebar-foreground">15</span>
+          </div>
+        )}
         <button
           onClick={toggleSidebar}
           className="flex h-8 w-full items-center justify-center rounded-lg text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
