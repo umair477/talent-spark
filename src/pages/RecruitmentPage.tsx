@@ -190,9 +190,9 @@ export default function RecruitmentPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-xl bg-secondary/50">
-                  <p className="text-xs text-muted-foreground">Match Score</p>
-                  <p className="text-lg font-semibold">{selected.matchScore}%</p>
+                <div className="p-3 rounded-xl bg-secondary/50 flex flex-col items-center justify-center">
+                  <CircularScore score={selected.matchScore} size={56} />
+                  <p className="text-xs text-muted-foreground mt-1">Match Score</p>
                 </div>
                 <div className="p-3 rounded-xl bg-secondary/50">
                   <p className="text-xs text-muted-foreground">Experience</p>
