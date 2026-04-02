@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Zap, Bot, User, CalendarDays, Loader2 } from "lucide-react";
+import { Send, Paperclip, Bot, User, CalendarDays, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
@@ -123,27 +123,30 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="p-4 border-t border-border/50">
+        <div className="p-4 border-t border-border/50 space-y-2">
+          {/* Smart Suggestions */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              "Check my payroll",
+              "Apply for Senior Dev role",
+              "Request leave",
+              "View my benefits",
+              "Check application status",
+            ].map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => sendMessage(suggestion)}
+                className="px-3 py-1 text-xs rounded-full border bg-secondary/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground">
               <Paperclip className="h-4 w-4" />
             </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground">
-                  <Zap className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => sendMessage("I'd like to request leave")}>
-                  <CalendarDays className="h-4 w-4 mr-2" /> Request Leave
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => sendMessage("Check my application status")}>
-                  <Loader2 className="h-4 w-4 mr-2" /> Check Application Status
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
 
             <Input
               value={input}
