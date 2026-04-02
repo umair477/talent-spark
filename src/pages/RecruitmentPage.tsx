@@ -5,7 +5,52 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+function getScoreReason(score: number): string {
+  if (score >= 90) return "Excellent skill match, strong interview performance, and relevant experience align closely with role requirements.";
+  if (score >= 70) return "Good foundational skills with some gaps in specialized areas. Could benefit from mentorship in key competencies.";
+  return "Significant gaps in required skills or experience. Interview revealed areas needing substantial development.";
+}
+
+function getScoreColor(score: number): string {
+  if (score >= 90) return "hsl(var(--success))";
+  if (score >= 70) return "hsl(var(--warning))";
+  return "hsl(var(--destructive))";
+}
+
+function CircularScore({ score, size = 40 }: { score: number; size?: number }) {
+  const stroke = 3.5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = getScoreColor(score);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="relative cursor-help" style={{ width: size, height: size }}>
+          <svg width={size} height={size} className="-rotate-90">
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth={stroke} />
+            <circle
+              cx={size / 2} cy={size / 2} r={radius} fill="none"
+              stroke={color} strokeWidth={stroke}
+              strokeDasharray={circumference} strokeDashoffset={offset}
+              strokeLinecap="round"
+              className="transition-all duration-500"
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold">{score}</span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-[220px] text-xs">
+        <p className="font-medium mb-1" style={{ color }}>{score}% Match</p>
+        <p className="text-muted-foreground">{getScoreReason(score)}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface Candidate {
   id: string;
