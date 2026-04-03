@@ -1,31 +1,76 @@
-import { useState } from "react";
-import { MessageSquare, Users, CalendarDays, BarChart3, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  BarChart3,
+  BriefcaseBusiness,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  MessageSquare,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  UserRound,
+} from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { fetchMyLeaveBalance } from "@/lib/api";
+import { useSessionProfile } from "@/hooks/use-session-profile";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const navItems = [
-  { title: "Chat Assistant", url: "/", icon: MessageSquare },
-  { title: "Recruitment Hub", url: "/recruitment", icon: Users },
-  { title: "Leave Calendar", url: "/leave", icon: CalendarDays },
-  { title: "Analytics Dashboard", url: "/analytics", icon: BarChart3 },
-];
+function formatLeaveNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { data: profile } = useSessionProfile();
+  const isEmployee = profile?.role === "EMPLOYEE";
+  const isCandidate = profile?.role === "CANDIDATE";
+  const isAdmin = profile?.role === "ADMIN";
+
+  const navItems = isCandidate
+    ? [
+        { title: "Jobs", url: "/jobs", icon: BriefcaseBusiness },
+        { title: "Profile", url: "/profile", icon: UserRound },
+      ]
+    : [
+        { title: "Chat Assistant", url: "/chatbot", icon: MessageSquare },
+        { title: "Leave", url: "/leave", icon: CalendarDays },
+        ...(isAdmin
+          ? [
+              { title: "Recruitment Hub", url: "/recruitment", icon: Users },
+              { title: "User Management", url: "/users", icon: ShieldCheck },
+              { title: "Analytics", url: "/analytics", icon: BarChart3 },
+            ]
+          : []),
+        { title: "Profile", url: "/profile", icon: UserRound },
+      ];
+
+  const { data: balance } = useQuery({
+    queryKey: ["leave-balance", "me"],
+    queryFn: fetchMyLeaveBalance,
+    enabled: isEmployee,
+    retry: false,
+  });
+
+  const total = balance?.total ?? 18;
+  const remaining = balance?.remaining ?? total;
+  const used = balance?.used ?? 0;
+  const progress = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -36,8 +81,12 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-semibold text-sidebar-foreground">NexGen HR</span>
-              <span className="text-xs text-sidebar-muted">Intelligence Suite</span>
+              <span className="text-sm font-semibold text-sidebar-foreground">
+                {isCandidate ? "Talent Spark Jobs" : "NexGen HR"}
+              </span>
+              <span className="text-xs text-sidebar-muted">
+                {isCandidate ? "Candidate portal" : "Role-aware workspace"}
+              </span>
             </div>
           )}
         </div>
@@ -51,17 +100,16 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
-                    isActive={location.pathname === item.url}
-                    tooltip={item.title}
+                    isActive={item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url)}
+                    tooltip={collapsed ? item.title : undefined}
                   >
                     <NavLink
                       to={item.url}
-                      end
-                      className="rounded-lg transition-all duration-200"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary"
+                      className="flex items-center gap-3 rounded-xl px-3 py-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
                     >
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span className="text-sm">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -71,28 +119,50 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-2 space-y-2">
-        {!collapsed && (
-          <div className="rounded-xl bg-sidebar-accent p-3 space-y-2">
+      <SidebarFooter className="space-y-2 p-2">
+        {isEmployee && !collapsed && (
+          <button
+            type="button"
+            onClick={() => navigate("/leave/history")}
+            className="w-full rounded-xl bg-sidebar-accent p-3 text-left transition-colors hover:bg-sidebar-accent/80"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-sidebar-foreground">Leave Balance</span>
-              <span className="text-xs text-sidebar-muted">15/20</span>
+              <span className="text-xs text-sidebar-muted">
+                {formatLeaveNumber(remaining)}/{formatLeaveNumber(total)}
+              </span>
             </div>
-            <div className="h-2 rounded-full bg-sidebar-border overflow-hidden">
-              <div className="h-full rounded-full bg-sidebar-primary transition-all" style={{ width: "75%" }} />
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-sidebar-border">
+              <div className="h-full rounded-full bg-sidebar-primary transition-all" style={{ width: `${progress}%` }} />
             </div>
-            <p className="text-[10px] text-sidebar-muted">5 days used · 15 remaining</p>
-          </div>
+            <p className="mt-2 text-[10px] text-sidebar-muted">
+              {formatLeaveNumber(used)} days used · {formatLeaveNumber(remaining)} remaining
+            </p>
+          </button>
         )}
-        {collapsed && (
-          <div className="flex flex-col items-center gap-0.5 py-1" title="Leave: 15/20 days">
+
+        {isEmployee && collapsed && (
+          <button
+            type="button"
+            onClick={() => navigate("/leave/history")}
+            className="flex w-full flex-col items-center gap-0.5 rounded-lg py-1 transition-colors hover:bg-sidebar-accent"
+            title={`Leave: ${formatLeaveNumber(remaining)}/${formatLeaveNumber(total)} days remaining`}
+          >
             <CalendarDays className="h-4 w-4 text-sidebar-muted" />
-            <span className="text-[10px] font-medium text-sidebar-foreground">15</span>
+            <span className="text-[10px] font-medium text-sidebar-foreground">{formatLeaveNumber(remaining)}</span>
+          </button>
+        )}
+
+        {!collapsed && profile && (
+          <div className="rounded-xl border border-sidebar-border/70 bg-sidebar-accent/40 px-3 py-2 text-xs text-sidebar-muted">
+            Signed in as {profile.role.toLowerCase()}
           </div>
         )}
+
         <button
+          type="button"
           onClick={toggleSidebar}
-          className="flex h-8 w-full items-center justify-center rounded-lg text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          className="flex h-8 w-full items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>

@@ -1,29 +1,12 @@
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X, CalendarDays, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-interface LeaveRequest {
-  id: string;
-  name: string;
-  avatar: string;
-  dates: string;
-  days: number;
-  reason: string;
-  sentiment: "positive" | "neutral" | "concern";
-  department: string;
-  status: "pending" | "approved" | "denied";
-}
-
-const initialRequests: LeaveRequest[] = [
-  { id: "1", name: "Sarah Mitchell", avatar: "SM", dates: "Apr 7 – Apr 11", days: 5, reason: "Family vacation planned months ago. Very excited to spend time with kids.", sentiment: "positive", department: "Engineering", status: "pending" },
-  { id: "2", name: "Raj Patel", avatar: "RP", dates: "Apr 14 – Apr 15", days: 2, reason: "Medical appointment and recovery time needed.", sentiment: "neutral", department: "Design", status: "pending" },
-  { id: "3", name: "Tom Anderson", avatar: "TA", dates: "Apr 21 – Apr 25", days: 5, reason: "Feeling overwhelmed with workload. Need time to recharge and avoid burnout.", sentiment: "concern", department: "Marketing", status: "pending" },
-  { id: "4", name: "Lisa Chen", avatar: "LC", dates: "Apr 9 – Apr 10", days: 2, reason: "Attending a professional development conference.", sentiment: "positive", department: "Product", status: "pending" },
-  { id: "5", name: "Mike Davis", avatar: "MD", dates: "Apr 28 – Apr 30", days: 3, reason: "Personal matters to attend to.", sentiment: "neutral", department: "Engineering", status: "pending" },
-  { id: "6", name: "Amy Foster", avatar: "AF", dates: "Apr 16 – Apr 18", days: 3, reason: "Stressed about deadlines, need a mental health break.", sentiment: "concern", department: "Sales", status: "pending" },
-];
+import { fetchLeaveRequests, updateLeaveRequestStatus } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 function getSentimentStyle(s: string) {
   switch (s) {
@@ -35,14 +18,72 @@ function getSentimentStyle(s: string) {
 }
 
 export default function LeavePage() {
-  const [requests, setRequests] = useState(initialRequests);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [optimisticState, setOptimisticState] = useState<Record<number, "approved" | "denied">>({});
 
-  const updateStatus = (id: string, status: "approved" | "denied") => {
-    setRequests((r) => r.map((req) => (req.id === id ? { ...req, status } : req)));
+  const { data: requests = [], isLoading } = useQuery({
+    queryKey: ["leave-requests"],
+    queryFn: fetchLeaveRequests,
+  });
+
+  const mutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: "approved" | "denied" }) =>
+      updateLeaveRequestStatus(id, status),
+    onMutate: ({ id, status }) => {
+      setOptimisticState((current) => ({ ...current, [id]: status }));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+    },
+    onError: () => {
+      toast({
+        title: "Unable to update request",
+        description: "Make sure the backend is running and reachable.",
+        variant: "destructive",
+      });
+    },
+    onSettled: (_, __, variables) => {
+      setOptimisticState((current) => {
+        const next = { ...current };
+        delete next[variables.id];
+        return next;
+      });
+    },
+  });
+
+  const normalizedRequests = requests.map((request) => {
+    const currentStatus = optimisticState[request.id] ?? request.status;
+    const reason = request.reason;
+    const sentiment =
+      request.privacy_flagged || /stress|burnout|overwhelmed/i.test(reason)
+        ? "concern"
+        : /vacation|conference|wedding|family/i.test(reason)
+          ? "positive"
+          : "neutral";
+    const start = new Date(request.start_date);
+    const end = new Date(request.end_date);
+    const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    return {
+      ...request,
+      status: currentStatus,
+      avatar: request.employee_name
+        .split(" ")
+        .map((name) => name[0])
+        .join(""),
+      name: request.employee_name,
+      days,
+      dates: `${format(start, "MMM d")} – ${format(end, "MMM d")}`,
+      sentiment,
+    };
+  });
+
+  const pending = normalizedRequests.filter((request) => request.status === "pending");
+  const resolved = normalizedRequests.filter((request) => request.status !== "pending");
+
+  const updateStatus = (id: number, status: "approved" | "denied") => {
+    mutation.mutate({ id, status });
   };
-
-  const pending = requests.filter((r) => r.status === "pending");
-  const resolved = requests.filter((r) => r.status !== "pending");
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8">
@@ -50,6 +91,12 @@ export default function LeavePage() {
         <h1 className="text-xl font-semibold">Leave Management</h1>
         <p className="text-sm text-muted-foreground">{pending.length} pending requests</p>
       </div>
+
+      {isLoading && (
+        <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+          Loading leave requests from the FastAPI backend...
+        </div>
+      )}
 
       {pending.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

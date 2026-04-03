@@ -1,32 +1,27 @@
 import { Users, UserCheck, CalendarDays, TrendingUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { fetchAnalyticsOverview } from "@/lib/api";
 
-const stats = [
-  { label: "Total Candidates", value: "248", change: "+12%", icon: Users },
-  { label: "Shortlisted", value: "42", change: "+8%", icon: UserCheck },
-  { label: "Pending Leaves", value: "6", change: "-2", icon: CalendarDays },
-  { label: "Avg Match Score", value: "78%", change: "+5%", icon: TrendingUp },
-];
-
-const hiringData = [
-  { month: "Jan", hires: 8 },
-  { month: "Feb", hires: 12 },
-  { month: "Mar", hires: 6 },
-  { month: "Apr", hires: 15 },
-  { month: "May", hires: 10 },
-  { month: "Jun", hires: 18 },
-];
-
-const departmentData = [
-  { name: "Engineering", value: 45 },
-  { name: "Design", value: 20 },
-  { name: "Marketing", value: 15 },
-  { name: "Sales", value: 20 },
-];
+const ICONS = {
+  "Total Candidates": Users,
+  Shortlisted: UserCheck,
+  "Pending Leaves": CalendarDays,
+  "Avg Match Score": TrendingUp,
+};
 
 const COLORS = ["hsl(217,91%,60%)", "hsl(142,71%,45%)", "hsl(38,92%,50%)", "hsl(280,65%,60%)"];
 
 export default function AnalyticsPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["analytics-overview"],
+    queryFn: fetchAnalyticsOverview,
+  });
+
+  const stats = data?.stats ?? [];
+  const hiringData = (data?.monthly_hires ?? []).map((point) => ({ month: point.label, hires: point.value }));
+  const departmentData = (data?.candidates_by_department ?? []).map((point) => ({ name: point.label, value: point.value }));
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div>
@@ -34,13 +29,22 @@ export default function AnalyticsPage() {
         <p className="text-sm text-muted-foreground">Overview of HR metrics and trends</p>
       </div>
 
+      {isLoading && (
+        <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+          Loading analytics from the backend...
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="rounded-xl border bg-card p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
-              <s.icon className="h-4 w-4 text-muted-foreground" />
+              {(() => {
+                const Icon = ICONS[s.label as keyof typeof ICONS] ?? TrendingUp;
+                return <Icon className="h-4 w-4 text-muted-foreground" />;
+              })()}
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-semibold">{s.value}</span>

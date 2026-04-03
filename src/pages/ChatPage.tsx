@@ -1,19 +1,28 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Bot, User, CalendarDays, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Send, Paperclip, Bot, User, ShieldAlert, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { ensureDemoToken } from "@/lib/auth";
+import { WS_BASE_URL } from "@/lib/config";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
   role: "bot" | "user";
   content: string;
-  widget?: "leave-request";
+  workflow?: string;
+  structuredReport?: {
+    start_date?: string;
+    end_date?: string;
+    reason_summary?: string;
+    urgency_level?: string;
+    handover_contact?: string;
+    approval_status?: string;
+  } | null;
+  privacyNote?: string | null;
   timestamp: Date;
 }
 
@@ -30,34 +39,105 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(true);
+  const [connectionLabel, setConnectionLabel] = useState("Connecting");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function connect() {
+      try {
+        const token = await ensureDemoToken();
+        if (!active) return;
+        const socket = new WebSocket(`${WS_BASE_URL}/api/ws/chat?token=${encodeURIComponent(token)}`);
+        socketRef.current = socket;
+
+        socket.onopen = () => {
+          if (!active) return;
+          setIsConnecting(false);
+          setConnectionLabel("Live");
+        };
+
+        socket.onmessage = (event) => {
+          if (!active) return;
+          const payload = JSON.parse(event.data) as {
+            workflow: string;
+            reply: string;
+            privacy_note?: string | null;
+            structured_report?: Message["structuredReport"];
+          };
+          setIsTyping(false);
+          setMessages((current) => [
+            ...current,
+            {
+              id: crypto.randomUUID(),
+              role: "bot",
+              content: payload.reply,
+              workflow: payload.workflow,
+              structuredReport: payload.structured_report ?? null,
+              privacyNote: payload.privacy_note ?? null,
+              timestamp: new Date(),
+            },
+          ]);
+        };
+
+        socket.onerror = () => {
+          if (!active) return;
+          setIsTyping(false);
+          setConnectionLabel("Offline");
+          toast({
+            title: "Chat backend unavailable",
+            description: "Start the FastAPI server to enable live HR chat.",
+            variant: "destructive",
+          });
+        };
+
+        socket.onclose = () => {
+          if (!active) return;
+          setIsTyping(false);
+          setConnectionLabel("Disconnected");
+          setIsConnecting(false);
+        };
+      } catch (error) {
+        if (!active) return;
+        setIsConnecting(false);
+        setConnectionLabel("Offline");
+        toast({
+          title: "Unable to connect",
+          description: error instanceof Error ? error.message : "Demo login failed.",
+          variant: "destructive",
+        });
+      }
+    }
+
+    connect();
+
+    return () => {
+      active = false;
+      socketRef.current?.close();
+    };
+  }, [toast]);
+
   const sendMessage = (text: string) => {
-    if (!text.trim()) return;
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: text, timestamp: new Date() };
+    const trimmed = text.trim();
+    if (!trimmed || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+      timestamp: new Date(),
+    };
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setIsTyping(true);
-
-    const isLeaveRequest = text.toLowerCase().includes("leave");
-
-    setTimeout(() => {
-      setIsTyping(false);
-      const botMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "bot",
-        content: isLeaveRequest
-          ? "I can help you request leave. Please fill out the details below:"
-          : "Thanks for your message! I've processed your request. Is there anything else I can help you with?",
-        widget: isLeaveRequest ? "leave-request" : undefined,
-        timestamp: new Date(),
-      };
-      setMessages((m) => [...m, botMsg]);
-    }, 1500);
+    socketRef.current.send(JSON.stringify({ message: trimmed }));
   };
 
   return (
@@ -73,8 +153,8 @@ export default function ChatPage() {
             <p className="text-xs text-muted-foreground">Always here to help</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <span className="text-xs text-muted-foreground">Online</span>
+            <span className={cn("h-2 w-2 rounded-full", connectionLabel === "Live" ? "bg-success animate-pulse" : "bg-warning")} />
+            <span className="text-xs text-muted-foreground">{connectionLabel}</span>
           </div>
         </div>
 
@@ -95,7 +175,23 @@ export default function ChatPage() {
                   : "bg-primary text-primary-foreground rounded-tr-md"
               )}>
                 <p className="leading-relaxed">{msg.content}</p>
-                {msg.widget === "leave-request" && <LeaveWidget />}
+                {msg.workflow && msg.role === "bot" && (
+                  <div className="mt-2">
+                    <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                      {msg.workflow.replaceAll("_", " ")}
+                    </Badge>
+                  </div>
+                )}
+                {msg.privacyNote && (
+                  <div className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                    <div className="flex items-center gap-2 font-medium">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Privacy Filter Active
+                    </div>
+                    <p className="mt-1 text-warning/90">{msg.privacyNote}</p>
+                  </div>
+                )}
+                {msg.structuredReport && <LeaveSummaryCard report={msg.structuredReport} />}
                 <span className={cn(
                   "block text-[10px] mt-1.5",
                   msg.role === "bot" ? "text-muted-foreground" : "text-primary-foreground/70"
@@ -152,12 +248,12 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage(input)}
-              placeholder="Ask me anything..."
+              placeholder={isConnecting ? "Connecting to backend..." : "Ask me anything..."}
               className="flex-1 bg-secondary/50 border-0 focus-visible:ring-1"
             />
 
-            <Button size="icon" onClick={() => sendMessage(input)} disabled={!input.trim()}>
-              <Send className="h-4 w-4" />
+            <Button size="icon" onClick={() => sendMessage(input)} disabled={!input.trim() || isConnecting}>
+              {isConnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -166,50 +262,23 @@ export default function ChatPage() {
   );
 }
 
-function LeaveWidget() {
-  const [date, setDate] = useState<Date>();
-  const [reason, setReason] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  if (submitted) {
-    return (
-      <div className="mt-3 p-3 rounded-xl bg-success/10 border border-success/20 text-sm">
-        <p className="font-medium text-success">✓ Leave request submitted</p>
-        <p className="text-muted-foreground text-xs mt-1">
-          {date && format(date, "PPP")} — {reason || "No reason specified"}
-        </p>
-      </div>
-    );
-  }
-
+function LeaveSummaryCard({
+  report,
+}: {
+  report: NonNullable<Message["structuredReport"]>;
+}) {
   return (
-    <div className="mt-3 space-y-3 p-3 rounded-xl bg-secondary/50 border border-border/50">
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Select Date</label>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal">
-              <CalendarDays className="mr-2 h-4 w-4" />
-              {date ? format(date, "PPP") : "Pick a date"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={date} onSelect={setDate} className="p-3 pointer-events-auto" />
-          </PopoverContent>
-        </Popover>
+    <div className="mt-3 rounded-xl border border-success/20 bg-success/10 p-3 text-xs text-foreground">
+      <p className="font-medium text-success">Leave report prepared for HR review</p>
+      <div className="mt-2 grid gap-1 text-muted-foreground">
+        <p>
+          Dates: {report.start_date} to {report.end_date}
+        </p>
+        <p>Reason: {report.reason_summary ?? "Pending"}</p>
+        <p>Urgency: {report.urgency_level ?? "Pending"}</p>
+        <p>Handover: {report.handover_contact ?? "Pending"}</p>
+        <p>Status: {report.approval_status ?? "pending_hr_review"}</p>
       </div>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Reason</label>
-        <Textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="Brief reason for leave..."
-          className="min-h-[60px] bg-background/50 text-sm resize-none"
-        />
-      </div>
-      <Button size="sm" className="w-full" onClick={() => setSubmitted(true)} disabled={!date}>
-        Submit Request
-      </Button>
     </div>
   );
 }
