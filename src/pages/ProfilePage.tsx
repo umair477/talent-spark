@@ -10,8 +10,8 @@ export default function ProfilePage() {
         <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">Profile</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Current authenticated identity</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          This page is powered by <code>/api/auth/me</code> and reflects the exact role and record links attached to
-          the active JWT.
+          This page reflects the exact authenticated session profile, whether it comes from the general JWT endpoint or
+          the dedicated employee auth flow.
         </p>
       </div>
 

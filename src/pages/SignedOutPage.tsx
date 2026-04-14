@@ -1,5 +1,5 @@
 import { ArrowRight, BriefcaseBusiness, Building2, ShieldCheck } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { resumeDemoSession, type DemoRole } from "@/lib/auth";
 
@@ -16,12 +16,6 @@ const demoSessions: Array<{
     icon: ShieldCheck,
   },
   {
-    role: "EMPLOYEE",
-    title: "Employee Workspace",
-    description: "Chatbot access plus personal leave balance and history only.",
-    icon: Building2,
-  },
-  {
     role: "CANDIDATE",
     title: "Candidate Workspace",
     description: "Jobs landing and personal application status with recruitment data isolation.",
@@ -36,13 +30,31 @@ export default function SignedOutPage() {
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-white to-sky-100 p-6">
       <div className="w-full max-w-4xl rounded-[2rem] border bg-white/90 p-8 shadow-2xl shadow-slate-200/60 backdrop-blur">
         <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">Secure Session Entry</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Choose a Talent Spark role to continue</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Choose how you want to enter Talent Spark</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          This session chooser lets you test the new RBAC architecture. Candidates go to jobs, employees get chatbot
-          and leave access, and admins unlock the full dashboard.
+          Employees now use dedicated signup and login pages backed by HR pre-registration. Admin and candidate demo
+          entry points are still available for local testing.
         </p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="rounded-[1.5rem] border p-5 text-left">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Building2 className="h-6 w-6" />
+            </div>
+            <h2 className="mt-5 text-lg font-semibold">Employee Access</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Existing employees can activate their account with an official company email and then sign in securely.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <Button asChild>
+                <Link to="/employee/login">Sign In</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/employee/signup">Sign Up</Link>
+              </Button>
+            </div>
+          </div>
+
           {demoSessions.map((session) => (
             <button
               key={session.role}
@@ -67,8 +79,7 @@ export default function SignedOutPage() {
         </div>
 
         <div className="mt-8 rounded-2xl border bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
-          Candidate applications are linked to the signed-in user, and candidate chat/sidebar access is intentionally
-          restricted until promotion to employee.
+          Candidate applications are linked to the signed-in user, and employee auth now uses server-validated session cookies instead of browser local storage.
         </div>
       </div>
     </main>

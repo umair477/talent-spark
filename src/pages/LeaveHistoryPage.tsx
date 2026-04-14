@@ -21,7 +21,7 @@ function getStatusClasses(status: LeaveRequest["status"]) {
   switch (status) {
     case "approved":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "denied":
+    case "rejected":
       return "border-rose-200 bg-rose-50 text-rose-700";
     default:
       return "border-amber-200 bg-amber-50 text-amber-700";
@@ -59,7 +59,7 @@ export default function LeaveHistoryPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border bg-card p-5 shadow-sm">
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Total Allowance</p>
-          <p className="mt-3 text-3xl font-semibold">{formatLeaveNumber(balance?.total ?? 18)}</p>
+          <p className="mt-3 text-3xl font-semibold">{formatLeaveNumber(balance?.total ?? 20)}</p>
           <p className="mt-1 text-sm text-muted-foreground">Annual leave entitlement</p>
         </div>
         <div className="rounded-2xl border bg-card p-5 shadow-sm">
@@ -69,7 +69,7 @@ export default function LeaveHistoryPage() {
         </div>
         <div className="rounded-2xl border bg-card p-5 shadow-sm">
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Remaining</p>
-          <p className="mt-3 text-3xl font-semibold">{formatLeaveNumber(balance?.remaining ?? 18)}</p>
+          <p className="mt-3 text-3xl font-semibold">{formatLeaveNumber(balance?.remaining ?? 20)}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Source: {balance?.provider?.replaceAll("_", " ") ?? "dynamic approved leave requests"}
           </p>

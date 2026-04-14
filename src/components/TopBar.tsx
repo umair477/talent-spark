@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "@/hooks/use-theme";
+import { useEmployeeAuth } from "@/hooks/use-employee-auth";
 import { useSessionProfile } from "@/hooks/use-session-profile";
 import { signOutDemoSession } from "@/lib/auth";
 
@@ -31,6 +32,7 @@ export function TopBar() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { data: profile } = useSessionProfile();
+  const employeeAuth = useEmployeeAuth();
 
   return (
     <header className="flex h-14 items-center justify-between gap-4 border-b bg-card/80 px-4 backdrop-blur-sm">
@@ -83,8 +85,12 @@ export function TopBar() {
             <DropdownMenuItem onClick={() => navigate("/settings")}>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => {
-                signOutDemoSession();
+              onClick={async () => {
+                if (employeeAuth.isAuthenticated) {
+                  await employeeAuth.logout();
+                } else {
+                  signOutDemoSession();
+                }
                 navigate("/signed-out");
               }}
             >

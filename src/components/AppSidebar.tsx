@@ -47,16 +47,20 @@ export function AppSidebar() {
         { title: "Jobs", url: "/jobs", icon: BriefcaseBusiness },
         { title: "Profile", url: "/profile", icon: UserRound },
       ]
-    : [
+    : isAdmin
+      ? [
+          { title: "Jobs", url: "/admin/jobs", icon: BriefcaseBusiness },
+          { title: "Candidates", url: "/admin/candidates", icon: Users },
+          { title: "Leaves", url: "/admin/leaves", icon: CalendarDays },
+          { title: "Chat Assistant", url: "/chatbot", icon: MessageSquare },
+          { title: "User Management", url: "/users", icon: ShieldCheck },
+          { title: "Analytics", url: "/analytics", icon: BarChart3 },
+          { title: "Profile", url: "/profile", icon: UserRound },
+        ]
+      : [
+        { title: "Dashboard", url: "/employee/dashboard", icon: Sparkles },
         { title: "Chat Assistant", url: "/chatbot", icon: MessageSquare },
         { title: "Leave", url: "/leave", icon: CalendarDays },
-        ...(isAdmin
-          ? [
-              { title: "Recruitment Hub", url: "/recruitment", icon: Users },
-              { title: "User Management", url: "/users", icon: ShieldCheck },
-              { title: "Analytics", url: "/analytics", icon: BarChart3 },
-            ]
-          : []),
         { title: "Profile", url: "/profile", icon: UserRound },
       ];
 
@@ -67,7 +71,7 @@ export function AppSidebar() {
     retry: false,
   });
 
-  const total = balance?.total ?? 18;
+  const total = balance?.total ?? 20;
   const remaining = balance?.remaining ?? total;
   const used = balance?.used ?? 0;
   const progress = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
@@ -82,10 +86,10 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-sidebar-foreground">
-                {isCandidate ? "Talent Spark Jobs" : "NexGen HR"}
+                {isCandidate ? "Talent Spark Jobs" : isAdmin ? "HR Admin Hub" : "NexGen HR"}
               </span>
               <span className="text-xs text-sidebar-muted">
-                {isCandidate ? "Candidate portal" : "Role-aware workspace"}
+                {isCandidate ? "Candidate portal" : isAdmin ? "Protected manager workspace" : "Role-aware workspace"}
               </span>
             </div>
           )}

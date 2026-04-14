@@ -25,6 +25,12 @@ function getStorageKey(role: DemoRole) {
   return `talent-spark-token-${role.toLowerCase()}`;
 }
 
+function decodeBase64UrlSegment(segment: string): string {
+  const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  return window.atob(padded);
+}
+
 function emitSessionChange() {
   window.dispatchEvent(new Event(SESSION_EVENT));
 }
@@ -41,6 +47,36 @@ export function setActiveDemoRole(role: DemoRole): void {
   window.localStorage.setItem(ACTIVE_ROLE_KEY, role);
   window.localStorage.removeItem(SESSION_DISABLED_KEY);
   emitSessionChange();
+}
+
+export function getStoredDemoToken(role?: DemoRole): string | null {
+  const resolvedRole = role ?? getActiveDemoRole();
+  if (!resolvedRole) {
+    return null;
+  }
+  return window.localStorage.getItem(getStorageKey(resolvedRole));
+}
+
+export function getDecodedSessionRole(role?: DemoRole): DemoRole | null {
+  const token = getStoredDemoToken(role);
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const [, payloadSegment] = token.split(".");
+    if (!payloadSegment) {
+      return null;
+    }
+    const payload = JSON.parse(decodeBase64UrlSegment(payloadSegment)) as { role?: DemoRole };
+    if (payload.role === "ADMIN" || payload.role === "EMPLOYEE" || payload.role === "CANDIDATE") {
+      return payload.role;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 export function clearDemoTokens(): void {

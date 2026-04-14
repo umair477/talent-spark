@@ -8,6 +8,7 @@ import { ensureDemoToken } from "@/lib/auth";
 import { WS_BASE_URL } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useEmployeeAuth } from "@/hooks/use-employee-auth";
 
 interface Message {
   id: string;
@@ -36,6 +37,7 @@ const initialMessages: Message[] = [
 ];
 
 export default function ChatPage() {
+  const employeeAuth = useEmployeeAuth();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -54,9 +56,12 @@ export default function ChatPage() {
 
     async function connect() {
       try {
-        const token = await ensureDemoToken();
+        const token = employeeAuth.isAuthenticated ? null : await ensureDemoToken();
         if (!active) return;
-        const socket = new WebSocket(`${WS_BASE_URL}/api/ws/chat?token=${encodeURIComponent(token)}`);
+        const socketUrl = token
+          ? `${WS_BASE_URL}/api/ws/chat?token=${encodeURIComponent(token)}`
+          : `${WS_BASE_URL}/api/ws/chat`;
+        const socket = new WebSocket(socketUrl);
         socketRef.current = socket;
 
         socket.onopen = () => {
@@ -123,7 +128,7 @@ export default function ChatPage() {
       active = false;
       socketRef.current?.close();
     };
-  }, [toast]);
+  }, [employeeAuth.isAuthenticated, toast]);
 
   const sendMessage = (text: string) => {
     const trimmed = text.trim();

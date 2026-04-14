@@ -26,7 +26,7 @@ export default function UserManagementPage() {
   });
 
   const promoteMutation = useMutation({
-    mutationFn: (userId: number) => promoteCandidateToEmployee(userId, { department: "Operations", annual_allowance: 18 }),
+    mutationFn: (userId: number) => promoteCandidateToEmployee(userId, { department: "Operations", annual_allowance: 20 }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({
