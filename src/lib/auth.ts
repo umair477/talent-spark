@@ -1,21 +1,7 @@
 import { API_BASE_URL } from "@/lib/config";
 
 export type DemoRole = "ADMIN" | "EMPLOYEE" | "CANDIDATE";
-
-const DEMO_CREDENTIALS: Record<DemoRole, { email: string; password: string }> = {
-  ADMIN: {
-    email: "admin.hr@talentspark.dev",
-    password: "admin123",
-  },
-  EMPLOYEE: {
-    email: "employee@talentspark.dev",
-    password: "user123",
-  },
-  CANDIDATE: {
-    email: "candidate@talentspark.dev",
-    password: "user123",
-  },
-};
+export type UnifiedRole = "admin" | "employee" | "candidate";
 
 const ACTIVE_ROLE_KEY = "talent-spark-active-role";
 const SESSION_DISABLED_KEY = "talent-spark-session-disabled";
@@ -33,6 +19,56 @@ function decodeBase64UrlSegment(segment: string): string {
 
 function emitSessionChange() {
   window.dispatchEvent(new Event(SESSION_EVENT));
+}
+
+function normalizeRole(value: unknown): DemoRole | null {
+  if (value === "ADMIN" || value === "admin") {
+    return "ADMIN";
+  }
+  if (value === "EMPLOYEE" || value === "employee") {
+    return "EMPLOYEE";
+  }
+  if (value === "CANDIDATE" || value === "candidate") {
+    return "CANDIDATE";
+  }
+  return null;
+}
+
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const [, payloadSegment] = token.split(".");
+    if (!payloadSegment) {
+      return null;
+    }
+    return JSON.parse(decodeBase64UrlSegment(payloadSegment)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  const payload = parseJwtPayload(token);
+  const exp = typeof payload?.exp === "number" ? payload.exp : null;
+  if (!exp) {
+    return true;
+  }
+  return exp * 1000 <= Date.now();
+}
+
+function readRoleFromToken(token: string): DemoRole | null {
+  const payload = parseJwtPayload(token);
+  return normalizeRole(payload?.role);
+}
+
+export function dashboardPathForRole(role: DemoRole | UnifiedRole): string {
+  const normalized = normalizeRole(role);
+  if (normalized === "ADMIN") {
+    return "/admin/dashboard";
+  }
+  if (normalized === "EMPLOYEE") {
+    return "/employee/chat";
+  }
+  return "/jobs";
 }
 
 export function getActiveDemoRole(): DemoRole | null {
@@ -62,21 +98,17 @@ export function getDecodedSessionRole(role?: DemoRole): DemoRole | null {
   if (!token) {
     return null;
   }
+  return readRoleFromToken(token);
+}
 
-  try {
-    const [, payloadSegment] = token.split(".");
-    if (!payloadSegment) {
-      return null;
-    }
-    const payload = JSON.parse(decodeBase64UrlSegment(payloadSegment)) as { role?: DemoRole };
-    if (payload.role === "ADMIN" || payload.role === "EMPLOYEE" || payload.role === "CANDIDATE") {
-      return payload.role;
-    }
-  } catch {
+export function getDecodedSessionFullName(role?: DemoRole): string | null {
+  const token = getStoredDemoToken(role);
+  if (!token) {
     return null;
   }
-
-  return null;
+  const payload = parseJwtPayload(token);
+  const fullName = payload?.full_name;
+  return typeof fullName === "string" && fullName.trim() ? fullName : null;
 }
 
 export function clearDemoTokens(): void {
@@ -114,6 +146,10 @@ export function subscribeToSessionChanges(callback: () => void): () => void {
 }
 
 async function isTokenStillValid(token: string): Promise<boolean> {
+  if (isTokenExpired(token)) {
+    return false;
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -125,46 +161,67 @@ async function isTokenStillValid(token: string): Promise<boolean> {
 function resolveRequestedRole(role?: DemoRole): DemoRole {
   const resolvedRole = role ?? getActiveDemoRole();
   if (!resolvedRole) {
-    throw new Error("No active demo session selected.");
+    throw new Error("No active session selected.");
   }
   return resolvedRole;
 }
 
 export async function ensureDemoToken(role?: DemoRole): Promise<string> {
   if (isDemoSessionSignedOut()) {
-    throw new Error("Demo session is signed out.");
+    throw new Error("Session is signed out.");
   }
 
   const resolvedRole = resolveRequestedRole(role);
   const storageKey = getStorageKey(resolvedRole);
   const cached = window.localStorage.getItem(storageKey);
-  if (cached) {
-    try {
-      if (await isTokenStillValid(cached)) {
-        return cached;
-      }
-    } catch {
-      // Fall through to re-authenticate if the cached token cannot be verified.
+  if (!cached) {
+    throw new Error("Session token is missing. Please sign in again.");
+  }
+
+  try {
+    if (await isTokenStillValid(cached)) {
+      return cached;
     }
-    window.localStorage.removeItem(storageKey);
+  } catch {
+    // Fall through to clear stale session state.
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(DEMO_CREDENTIALS[resolvedRole]),
-  });
+  window.localStorage.removeItem(storageKey);
+  if (getActiveDemoRole() === resolvedRole) {
+    window.localStorage.removeItem(ACTIVE_ROLE_KEY);
+  }
+  emitSessionChange();
+  throw new Error("Session expired. Please sign in again.");
+}
 
-  if (!response.ok) {
-    throw new Error(`Unable to authenticate demo ${resolvedRole.toLowerCase()} user.`);
+export function persistSessionFromLogin(token: string): DemoRole {
+  const role = readRoleFromToken(token);
+  if (!role) {
+    throw new Error("Access denied. Please contact your administrator.");
   }
 
-  const data = (await response.json()) as { access_token: string };
-  window.localStorage.setItem(storageKey, data.access_token);
-  if (getActiveDemoRole() !== resolvedRole) {
-    setActiveDemoRole(resolvedRole);
+  window.localStorage.setItem(getStorageKey(role), token);
+  window.localStorage.setItem(ACTIVE_ROLE_KEY, role);
+  window.localStorage.removeItem(SESSION_DISABLED_KEY);
+  emitSessionChange();
+  return role;
+}
+
+export function clearExpiredStoredTokens(): void {
+  const roles: DemoRole[] = ["ADMIN", "EMPLOYEE", "CANDIDATE"];
+  for (const role of roles) {
+    const key = getStorageKey(role);
+    const token = window.localStorage.getItem(key);
+    if (!token) {
+      continue;
+    }
+    if (isTokenExpired(token)) {
+      window.localStorage.removeItem(key);
+    }
   }
-  return data.access_token;
+
+  const active = getActiveDemoRole();
+  if (active && !window.localStorage.getItem(getStorageKey(active))) {
+    window.localStorage.removeItem(ACTIVE_ROLE_KEY);
+  }
 }

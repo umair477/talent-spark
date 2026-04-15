@@ -33,6 +33,7 @@ export interface AdminLeave {
   reason: string;
   status: "pending" | "approved" | "rejected";
   hr_note: string;
+  email_sent_at?: string | null;
   submitted_at: string;
 }
 
@@ -69,6 +70,14 @@ export interface UserProfile {
   candidate_id: number | null;
 }
 
+export interface UnifiedLoginResponse {
+  access_token: string;
+  token_type: string;
+  role: "admin" | "employee" | "candidate";
+  full_name: string;
+  employee_id: number | null;
+}
+
 export interface AdminUser {
   id: number;
   email: string;
@@ -85,7 +94,7 @@ export interface EmployeeAuthProfile {
   department: string;
   designation: string;
   date_of_joining: string;
-  role: "EMPLOYEE";
+  role: "EMPLOYEE" | "ADMIN";
   is_active: boolean;
 }
 
@@ -93,6 +102,38 @@ export interface EmployeeAuthResponse {
   access_token: string;
   token_type: string;
   employee: EmployeeAuthProfile;
+}
+
+export interface LeaveChatHistoryItem {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface LeaveChatResponse {
+  reply: string;
+  conversation_history: LeaveChatHistoryItem[];
+}
+
+export interface EmployeeLeaveRecord {
+  leave_id: number;
+  leave_type: "Annual" | "Sick" | "Casual" | "Unpaid";
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  hr_note: string;
+  submitted_at: string;
+}
+
+export interface EmployeeLeaveQuota {
+  annual_total: number;
+  annual_remaining: number;
+  sick_total: number;
+  sick_remaining: number;
+  casual_total: number;
+  casual_remaining: number;
+  unpaid_used: number;
 }
 
 export interface Candidate {
@@ -136,6 +177,9 @@ export interface AdminCandidate {
   cv_summary: string;
   screening_score: number;
   recommendation_label: "Highly Recommended" | "Recommended" | "Needs Review" | "Not Recommended";
+  interview_email_sent: boolean;
+  interview_date: string | null;
+  interview_email_sent_at: string | null;
   interview_transcript: Array<{
     question: string;
     answer: string;
@@ -207,6 +251,28 @@ export interface AdminJob {
   updated_at: string;
 }
 
+export interface AdminEmployee {
+  employee_id: number;
+  full_name: string;
+  official_email: string;
+  department: string;
+  designation: string;
+  date_of_joining: string;
+  role: "admin" | "employee";
+  is_active: boolean;
+  password_set: boolean;
+  annual_total: number;
+  annual_used: number;
+  annual_remaining: number;
+  sick_total: number;
+  sick_used: number;
+  sick_remaining: number;
+  casual_total: number;
+  casual_used: number;
+  casual_remaining: number;
+  unpaid_used: number;
+}
+
 export interface PublicJob {
   job_id: number;
   title: string;
@@ -219,6 +285,46 @@ export interface PublicJob {
   nice_to_have_qualifications: string[];
   status: "open" | "closed";
   created_at: string;
+}
+
+export interface PublicJobListing {
+  job_id: number;
+  title: string;
+  employment_type: "Full-time" | "Part-time" | "Contract";
+  experience_years: number;
+  description: string;
+  responsibilities: string[];
+}
+
+export interface CandidateCVUploadResponse {
+  candidate_id: number;
+  full_name: string;
+  email: string;
+  total_years_experience: number;
+  top_skills: string[];
+  extracted_summary: Record<string, unknown>;
+  reply: string;
+}
+
+export interface CandidatePublicApplyResponse {
+  session_id: string;
+  candidate_id: number;
+  reply: string;
+  question_number: number;
+  total_questions: number;
+}
+
+export interface CandidatePublicChatResponse {
+  reply: string;
+  question_number: number;
+  total_questions: number;
+  requires_elaboration: boolean;
+  ready_for_submission: boolean;
+}
+
+export interface CandidatePublicSubmitResponse {
+  reply: string;
+  submitted: boolean;
 }
 
 async function parseError(response: Response): Promise<Error> {
@@ -302,6 +408,20 @@ export async function employeeSignup(payload: {
   return response.json();
 }
 
+export async function unifiedLogin(payload: { email: string; password: string }): Promise<UnifiedLoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.json();
+}
+
 export async function employeeLogin(payload: { email: string; password: string }): Promise<EmployeeAuthResponse> {
   const response = await fetch(`${API_BASE_URL}/api/auth/employee/login`, {
     method: "POST",
@@ -335,6 +455,46 @@ export async function employeeLogout(): Promise<{ message: string }> {
   if (!response.ok) {
     throw await parseError(response);
   }
+  return response.json();
+}
+
+export async function sendEmployeeLeaveChat(payload: {
+  message: string;
+  conversation_history: LeaveChatHistoryItem[];
+}): Promise<LeaveChatResponse> {
+  const response = await authorizedFetch("/api/chat/leave", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+export async function submitEmployeeLeave(payload: {
+  leave_type: "Annual" | "Sick" | "Casual" | "Unpaid";
+  start_date: string;
+  end_date: string;
+  reason: string;
+}): Promise<EmployeeLeaveRecord> {
+  const response = await authorizedFetch("/api/leaves", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+export async function fetchEmployeeLeaves(): Promise<EmployeeLeaveRecord[]> {
+  const response = await authorizedFetch("/api/leaves/my");
+  return response.json();
+}
+
+export async function fetchEmployeeLeaveQuota(): Promise<EmployeeLeaveQuota> {
+  const response = await authorizedFetch("/api/leaves/quota/my");
   return response.json();
 }
 
@@ -416,6 +576,53 @@ export async function fetchAdminCandidate(candidateId: number): Promise<AdminCan
   return response.json();
 }
 
+export async function generateInterviewEmailDraft(
+  candidateId: number,
+  payload: {
+    interview_date: string;
+    interview_time: string;
+    interview_format: string;
+    location_or_link: string;
+    additional_notes?: string;
+  },
+): Promise<{ to_email: string; subject: string; body: string }> {
+  const response = await authorizedFetch(
+    `/api/admin/candidates/${candidateId}/generate-interview-email`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function sendInterviewEmail(
+  candidateId: number,
+  payload: {
+    to_email: string;
+    subject: string;
+    body: string;
+    interview_date?: string;
+  },
+): Promise<{ message: string }> {
+  const response = await authorizedFetch(
+    `/api/admin/candidates/${candidateId}/send-interview-email`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
 export async function fetchCandidateApplicationStatus(): Promise<CandidateApplicationStatus> {
   const response = await authorizedFetch("/api/recruitment/status");
   return response.json();
@@ -425,6 +632,84 @@ export async function fetchPublicJobs(): Promise<PublicJob[]> {
   const response = await fetch(`${API_BASE_URL}/api/recruitment/jobs`);
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchPublicJobListings(): Promise<PublicJobListing[]> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/public`);
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.json();
+}
+
+export async function uploadCandidateCv(payload: {
+  first_name: string;
+  last_name: string;
+  email: string;
+  file: File;
+}): Promise<CandidateCVUploadResponse> {
+  const formData = new FormData();
+  formData.append("first_name", payload.first_name);
+  formData.append("last_name", payload.last_name);
+  formData.append("email", payload.email);
+  formData.append("file", payload.file);
+
+  const response = await fetch(`${API_BASE_URL}/api/candidates/upload-cv`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.json();
+}
+
+export async function startCandidateApplication(
+  jobId: number,
+  payload: { first_name: string; last_name: string; email: string },
+): Promise<CandidatePublicApplyResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/candidates/apply/${jobId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.json();
+}
+
+export async function chatCandidateApplication(payload: {
+  session_id: string;
+  message: string;
+}): Promise<CandidatePublicChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/chat/candidate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.json();
+}
+
+export async function submitCandidateApplication(sessionId: string): Promise<CandidatePublicSubmitResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/candidates/submit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!response.ok) {
+    throw await parseError(response);
   }
   return response.json();
 }
@@ -473,6 +758,67 @@ export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
 
 export async function fetchAdminUsers(): Promise<AdminUser[]> {
   const response = await authorizedFetch("/api/admin/users", undefined, "ADMIN");
+  return response.json();
+}
+
+export async function fetchAdminEmployees(): Promise<AdminEmployee[]> {
+  const response = await authorizedFetch("/api/admin/employees", undefined, "ADMIN");
+  return response.json();
+}
+
+export async function createAdminEmployee(payload: {
+  full_name: string;
+  official_email: string;
+  department: string;
+  designation: string;
+  date_of_joining: string;
+  role: "employee" | "admin";
+}): Promise<{ message: string; employee_id: number }> {
+  const response = await authorizedFetch(
+    "/api/admin/employees",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function updateAdminEmployee(
+  employeeId: number,
+  payload: {
+    department?: string;
+    designation?: string;
+    role?: "employee" | "admin";
+    is_active?: boolean;
+  },
+): Promise<AdminEmployee> {
+  const response = await authorizedFetch(
+    `/api/admin/employees/${employeeId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function deactivateAdminEmployee(employeeId: number): Promise<{ message: string }> {
+  const response = await authorizedFetch(
+    `/api/admin/employees/${employeeId}`,
+    {
+      method: "DELETE",
+    },
+    "ADMIN",
+  );
   return response.json();
 }
 

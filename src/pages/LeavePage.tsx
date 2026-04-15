@@ -1,13 +1,21 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, X } from "lucide-react";
+import { Check, Mail, X } from "lucide-react";
 import { fetchAdminLeaves, fetchLeaveQuotas, type AdminLeave, updateAdminLeave } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 
 function statusClasses(status: AdminLeave["status"]) {
@@ -34,7 +42,9 @@ function quotaClasses(value: number) {
 export default function LeavePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [noteByLeaveId, setNoteByLeaveId] = useState<Record<number, string>>({});
+  const [rejectTarget, setRejectTarget] = useState<AdminLeave | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState("");
 
   const { data: leaves = [], isLoading: leavesLoading } = useQuery({
     queryKey: ["admin-leaves"],
@@ -49,7 +59,7 @@ export default function LeavePage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ leaveId, status, hrNote }: { leaveId: number; status: "approved" | "rejected"; hrNote: string }) =>
+    mutationFn: ({ leaveId, status, hrNote }: { leaveId: number; status: "approved" | "rejected"; hrNote?: string }) =>
       updateAdminLeave(leaveId, { status, hr_note: hrNote }),
     onSuccess: async (_, variables) => {
       await Promise.all([
@@ -57,11 +67,24 @@ export default function LeavePage() {
         queryClient.invalidateQueries({ queryKey: ["leave-quotas"] }),
         queryClient.invalidateQueries({ queryKey: ["leave-history"] }),
       ]);
-      setNoteByLeaveId((current) => ({ ...current, [variables.leaveId]: "" }));
-      toast({
-        title: `Leave ${variables.status}`,
-        description: "The leave request status has been updated.",
-      });
+
+      const leave = leaves.find((item) => item.leave_id === variables.leaveId);
+      const employeeName = leave?.employee_name ?? "employee";
+
+      if (variables.status === "approved") {
+        toast({
+          title: "Leave approved",
+          description: `Leave approved. A confirmation email has been sent to ${employeeName}.`,
+        });
+      } else {
+        toast({
+          title: "Leave rejected",
+          description: `Leave rejected. A notification email has been sent to ${employeeName}.`,
+        });
+        setRejectTarget(null);
+        setRejectReason("");
+        setRejectError("");
+      }
     },
     onError: (error) => {
       toast({
@@ -78,7 +101,7 @@ export default function LeavePage() {
         <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">Admin Dashboard</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Leave request management</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Review employee leave requests, record HR notes, and monitor annual, sick, and casual balances side by side.
+          Review employee leave requests, capture rejection reasons, and monitor annual, sick, and casual balances side by side.
         </p>
       </div>
 
@@ -93,7 +116,7 @@ export default function LeavePage() {
             <div className="flex items-center justify-between border-b px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold">Requests</h2>
-                <p className="text-sm text-muted-foreground">Approve or reject with an optional HR note.</p>
+                <p className="text-sm text-muted-foreground">Approve instantly or reject with a required reason.</p>
               </div>
               <Badge variant="outline">{leaves.length} requests</Badge>
             </div>
@@ -125,29 +148,36 @@ export default function LeavePage() {
                       <TableCell>{leave.total_days}</TableCell>
                       <TableCell className="max-w-xs text-muted-foreground">{leave.reason}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={statusClasses(leave.status)}>
-                          {leave.status}
-                        </Badge>
+                        <div className="inline-flex items-center gap-2">
+                          <Badge variant="outline" className={statusClasses(leave.status)}>
+                            {leave.status}
+                          </Badge>
+                          {leave.email_sent_at ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+                                  <Mail className="h-3.5 w-3.5" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Email notification sent on {format(new Date(leave.email_sent_at), "MMM d, yyyy h:mm a")}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                        </div>
                       </TableCell>
-                      <TableCell className="min-w-[220px]">
-                        <Input
-                          value={noteByLeaveId[leave.leave_id] ?? leave.hr_note ?? ""}
-                          onChange={(event) =>
-                            setNoteByLeaveId((current) => ({ ...current, [leave.leave_id]: event.target.value }))
-                          }
-                          placeholder="Optional HR note"
-                        />
-                      </TableCell>
+                      <TableCell className="max-w-[220px] text-sm text-muted-foreground">{leave.hr_note || "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
                             size="sm"
                             className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                            disabled={updateMutation.isPending}
                             onClick={() =>
                               updateMutation.mutate({
                                 leaveId: leave.leave_id,
                                 status: "approved",
-                                hrNote: noteByLeaveId[leave.leave_id] ?? leave.hr_note ?? "",
+                                hrNote: leave.hr_note,
                               })
                             }
                           >
@@ -158,13 +188,12 @@ export default function LeavePage() {
                             size="sm"
                             variant="outline"
                             className="gap-2"
-                            onClick={() =>
-                              updateMutation.mutate({
-                                leaveId: leave.leave_id,
-                                status: "rejected",
-                                hrNote: noteByLeaveId[leave.leave_id] ?? leave.hr_note ?? "",
-                              })
-                            }
+                            disabled={updateMutation.isPending}
+                            onClick={() => {
+                              setRejectTarget(leave);
+                              setRejectReason("");
+                              setRejectError("");
+                            }}
                           >
                             <X className="h-4 w-4" />
                             Reject
@@ -218,6 +247,56 @@ export default function LeavePage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={rejectTarget !== null} onOpenChange={(open) => !open && setRejectTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reason for Rejection</DialogTitle>
+            <DialogDescription>Provide a clear reason before rejecting this leave request.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Textarea
+              value={rejectReason}
+              onChange={(event) => {
+                setRejectReason(event.target.value);
+                if (event.target.value.trim()) {
+                  setRejectError("");
+                }
+              }}
+              placeholder="Type the rejection reason"
+              className="min-h-[140px]"
+            />
+            {rejectError ? <p className="text-sm text-destructive">{rejectError}</p> : null}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRejectTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={updateMutation.isPending}
+                onClick={() => {
+                  if (!rejectTarget) {
+                    return;
+                  }
+                  if (!rejectReason.trim()) {
+                    setRejectError("A reason is required when rejecting a leave.");
+                    return;
+                  }
+                  updateMutation.mutate({
+                    leaveId: rejectTarget.leave_id,
+                    status: "rejected",
+                    hrNote: rejectReason.trim(),
+                  });
+                }}
+              >
+                Confirm Rejection
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

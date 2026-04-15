@@ -5,10 +5,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/AppLayout";
-import ChatPage from "@/pages/ChatPage";
+import { EmployeePortalLayout } from "@/components/EmployeePortalLayout";
 import CandidateRecruitmentPage from "@/pages/CandidateRecruitmentPage";
 import LeavePage from "@/pages/LeavePage";
-import LeaveHistoryPage from "@/pages/LeaveHistoryPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
@@ -17,9 +16,13 @@ import JobsLandingPage from "@/pages/JobsLandingPage";
 import UserManagementPage from "@/pages/UserManagementPage";
 import AdminJobsPage from "@/pages/AdminJobsPage";
 import AdminCandidatesPage from "@/pages/AdminCandidatesPage";
+import AdminEmployeesPage from "@/pages/AdminEmployeesPage";
 import EmployeeSignupPage from "@/pages/EmployeeSignupPage";
 import EmployeeLoginPage from "@/pages/EmployeeLoginPage";
-import EmployeeDashboardPage from "@/pages/EmployeeDashboardPage";
+import EmployeeChatPage from "@/pages/EmployeeChatPage";
+import EmployeeLeavesPage from "@/pages/EmployeeLeavesPage";
+import PublicLandingPage from "@/pages/PublicLandingPage";
+import CandidateApplicationChatPage from "@/pages/CandidateApplicationChatPage";
 import NotFound from "@/pages/NotFound";
 import { EmployeeAuthProvider } from "@/contexts/EmployeeAuthContext";
 import { useEmployeeAuth } from "@/hooks/use-employee-auth";
@@ -29,8 +32,8 @@ import { useSessionProfile } from "@/hooks/use-session-profile";
 const queryClient = new QueryClient();
 
 const HOME_BY_ROLE = {
-  ADMIN: "/admin/jobs",
-  EMPLOYEE: "/employee/dashboard",
+  ADMIN: "/admin/dashboard",
+  EMPLOYEE: "/employee/chat",
   CANDIDATE: "/jobs",
 } as const;
 
@@ -58,15 +61,24 @@ function SessionGate() {
   }, []);
 
   if (employeeAuth.isAuthenticated && isEmployeeAuthPage) {
-    return <Navigate to="/employee/dashboard" replace />;
+    return <Navigate to="/employee/chat" replace />;
   }
 
   if (employeeAuth.isAuthenticated && location.pathname === "/signed-out") {
-    return <Navigate to="/employee/dashboard" replace />;
+    return <Navigate to="/employee/chat" replace />;
   }
 
   if (isEmployeeAuthPage) {
     return <Outlet />;
+  }
+
+  if (
+    !employeeAuth.isAuthenticated &&
+    !employeeAuth.isLoading &&
+    location.pathname.startsWith("/employee/") &&
+    (signedOut || activeRole === null)
+  ) {
+    return <Navigate to="/employee/login" replace />;
   }
 
   if (!employeeAuth.isAuthenticated && !employeeAuth.isLoading && (signedOut || activeRole === null) && location.pathname !== "/signed-out") {
@@ -94,7 +106,7 @@ function ProtectedRoute({
 
   if (employeeAuth.isAuthenticated && employeeAuth.employee) {
     if (!allowedRoles.includes("EMPLOYEE")) {
-      return <Navigate to="/employee/dashboard" replace />;
+      return <Navigate to="/employee/chat" replace />;
     }
     return <Outlet />;
   }
@@ -127,20 +139,12 @@ function RoleHomeRedirect() {
   const employeeAuth = useEmployeeAuth();
   const { data, isLoading } = useSessionProfile();
   if (employeeAuth.isAuthenticated) {
-    return <Navigate to="/employee/dashboard" replace />;
+    return <Navigate to="/employee/chat" replace />;
   }
   if (isLoading || !data) {
     return <FullPageMessage message="Preparing your home screen..." />;
   }
   return <Navigate to={HOME_BY_ROLE[data.role]} replace />;
-}
-
-function LeaveRoutePage() {
-  const { data, isLoading } = useSessionProfile();
-  if (isLoading || !data) {
-    return <FullPageMessage message="Loading leave workspace..." />;
-  }
-  return data.role === "EMPLOYEE" ? <LeaveHistoryPage /> : <Navigate to="/admin/leaves" replace />;
 }
 
 function RecruitmentRoutePage() {
@@ -159,34 +163,37 @@ const App = () => (
       <EmployeeAuthProvider>
         <BrowserRouter>
           <Routes>
+            <Route path="/" element={<PublicLandingPage />} />
+            <Route path="/apply/:jobId" element={<CandidateApplicationChatPage />} />
             <Route path="/employee/signup" element={<EmployeeSignupPage />} />
             <Route path="/employee/login" element={<EmployeeLoginPage />} />
             <Route element={<SessionGate />}>
               <Route path="/signed-out" element={<SignedOutPage />} />
-              <Route element={<ProtectedRoute allowedRoles={["ADMIN", "EMPLOYEE", "CANDIDATE"]} />}>
+
+              <Route element={<ProtectedRoute allowedRoles={["EMPLOYEE"]} />}>
+                <Route element={<EmployeePortalLayout />}>
+                  <Route path="/employee/dashboard" element={<Navigate to="/employee/chat" replace />} />
+                  <Route path="/employee/chat" element={<EmployeeChatPage />} />
+                  <Route path="/employee/leaves" element={<EmployeeLeavesPage />} />
+                </Route>
+              </Route>
+
+              <Route element={<ProtectedRoute allowedRoles={["ADMIN", "CANDIDATE"]} />}>
                 <Route element={<AppShell />}>
-                  <Route path="/" element={<RoleHomeRedirect />} />
-                  <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
+                  <Route path="/home" element={<RoleHomeRedirect />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/settings" element={<SettingsPage />} />
 
                   <Route element={<ProtectedRoute allowedRoles={["CANDIDATE"]} />}>
                     <Route path="/jobs" element={<JobsLandingPage />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute allowedRoles={["ADMIN", "EMPLOYEE"]} />}>
-                    <Route path="/chatbot" element={<ChatPage />} />
-                    <Route path="/leave" element={<LeaveRoutePage />} />
-                    <Route path="/leave/history" element={<LeaveHistoryPage />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute allowedRoles={["ADMIN", "CANDIDATE"]} />}>
                     <Route path="/recruitment" element={<RecruitmentRoutePage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+                    <Route path="/admin/dashboard" element={<Navigate to="/admin/jobs" replace />} />
                     <Route path="/admin/jobs" element={<AdminJobsPage />} />
                     <Route path="/admin/candidates" element={<AdminCandidatesPage />} />
+                    <Route path="/admin/employees" element={<AdminEmployeesPage />} />
                     <Route path="/admin/leaves" element={<LeavePage />} />
                     <Route path="/analytics" element={<AnalyticsPage />} />
                     <Route path="/users" element={<UserManagementPage />} />

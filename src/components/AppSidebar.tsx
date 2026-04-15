@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
   ShieldCheck,
   Sparkles,
   Users,
@@ -49,17 +48,17 @@ export function AppSidebar() {
       ]
     : isAdmin
       ? [
+          { title: "Dashboard", url: "/admin/dashboard", icon: Sparkles },
           { title: "Jobs", url: "/admin/jobs", icon: BriefcaseBusiness },
           { title: "Candidates", url: "/admin/candidates", icon: Users },
+          { title: "Employees", url: "/admin/employees", icon: UserRound },
           { title: "Leaves", url: "/admin/leaves", icon: CalendarDays },
-          { title: "Chat Assistant", url: "/chatbot", icon: MessageSquare },
           { title: "User Management", url: "/users", icon: ShieldCheck },
           { title: "Analytics", url: "/analytics", icon: BarChart3 },
           { title: "Profile", url: "/profile", icon: UserRound },
         ]
       : [
         { title: "Dashboard", url: "/employee/dashboard", icon: Sparkles },
-        { title: "Chat Assistant", url: "/chatbot", icon: MessageSquare },
         { title: "Leave", url: "/leave", icon: CalendarDays },
         { title: "Profile", url: "/profile", icon: UserRound },
       ];
