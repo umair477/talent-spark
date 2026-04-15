@@ -11,7 +11,7 @@ import {
   type PublicJobListing,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 type CandidateStep = "first_name" | "last_name" | "email" | "upload_cv" | "screening" | "submitted";
@@ -321,8 +321,8 @@ export default function CandidateApplicationChatPage() {
               </p>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Input
+            <div className="flex items-end gap-2">
+              <Textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -331,8 +331,14 @@ export default function CandidateApplicationChatPage() {
                     void handleCandidateText(input);
                   }
                 }}
-                placeholder={step === "screening" ? "Type your answer..." : "Type your response..."}
+                placeholder={
+                  step === "screening"
+                    ? "Type your answer... (Shift+Enter for new line)"
+                    : "Type your response... (Shift+Enter for new line)"
+                }
                 disabled={isTyping || isSubmitting || isUploadingCv}
+                rows={3}
+                className="max-h-40 min-h-[72px] resize-y"
               />
               <Button
                 size="icon"
