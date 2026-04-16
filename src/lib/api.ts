@@ -197,6 +197,68 @@ export interface AdminCandidate {
   applied_at: string;
 }
 
+export interface InterviewAvailableSlot {
+  slot_id: string;
+  start: string;
+  end: string;
+  formatted_display: string;
+  day_of_week: string;
+}
+
+export interface InterviewProposedSlot {
+  start: string;
+  end: string;
+}
+
+export interface InterviewBookingRecord {
+  interview_id: number;
+  candidate_id: number;
+  candidate_name: string;
+  candidate_email: string;
+  job_id: number | null;
+  job_title: string;
+  format: string;
+  location_or_link: string;
+  interviewer_ids: number[];
+  proposed_slots: InterviewProposedSlot[];
+  selected_slot_start: string | null;
+  selected_slot_end: string | null;
+  token_expires_at: string;
+  status: "pending_booking" | "booked" | "completed" | "cancelled" | "rescheduled" | "expired";
+  meet_link: string | null;
+  notes: string;
+  created_at: string;
+}
+
+export interface BookingPortalInterview {
+  interview_id: number;
+  candidate_name: string;
+  candidate_email: string;
+  job_title: string;
+  format: string;
+  location_or_link: string;
+  proposed_slots: InterviewAvailableSlot[];
+  selected_slot_start: string | null;
+  selected_slot_end: string | null;
+  token_expires_at: string;
+  status: "pending_booking" | "booked" | "completed" | "cancelled" | "rescheduled" | "expired";
+  meet_link: string | null;
+}
+
+export interface BookingConfirmResponse {
+  message: string;
+  interview_id: number;
+  status: "booked" | "completed" | "cancelled" | "rescheduled" | "pending_booking" | "expired";
+  selected_slot_start: string;
+  selected_slot_end: string;
+  format: string;
+  meet_link: string | null;
+  candidate_email: string;
+  google_calendar_url: string;
+  outlook_calendar_url: string;
+  ics_download_url: string;
+}
+
 export interface CandidateApplicationStatus {
   candidate: Candidate | null;
 }
@@ -620,6 +682,164 @@ export async function sendInterviewEmail(
     },
     "ADMIN",
   );
+  return response.json();
+}
+
+export async function fetchInterviewAvailableSlots(payload: {
+  date_from: string;
+  date_to: string;
+  duration_minutes: number;
+  format: string;
+}): Promise<{ slots: InterviewAvailableSlot[] }> {
+  const query = new URLSearchParams({
+    date_from: payload.date_from,
+    date_to: payload.date_to,
+    duration_minutes: String(payload.duration_minutes),
+    format: payload.format,
+  });
+  const response = await authorizedFetch(`/api/admin/interviews/available-slots?${query.toString()}`, undefined, "ADMIN");
+  return response.json();
+}
+
+export async function createInterviewBookingRequest(payload: {
+  candidate_id: number;
+  job_id?: number | null;
+  proposed_slots: InterviewProposedSlot[];
+  format: string;
+  location_or_link: string;
+  interviewer_ids: number[];
+  notes?: string;
+}): Promise<{
+  interview_id: number;
+  booking_token: string;
+  booking_url: string;
+  token_expires_at: string;
+  email_subject: string;
+  email_body: string;
+  email_sent: boolean;
+}> {
+  const response = await authorizedFetch(
+    "/api/admin/interviews/create-booking-request",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function fetchAdminInterviews(): Promise<InterviewBookingRecord[]> {
+  const response = await authorizedFetch("/api/admin/interviews", undefined, "ADMIN");
+  return response.json();
+}
+
+export async function cancelAdminInterview(interviewId: number, reason: string): Promise<{ message: string }> {
+  const response = await authorizedFetch(
+    `/api/admin/interviews/${interviewId}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reason }),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function rescheduleAdminInterview(payload: {
+  interview_id: number;
+  new_proposed_slots: InterviewProposedSlot[];
+  format?: string;
+  location_or_link?: string;
+  interviewer_ids?: number[];
+  notes?: string;
+}): Promise<{
+  interview_id: number;
+  booking_token: string;
+  booking_url: string;
+  token_expires_at: string;
+  email_subject: string;
+  email_body: string;
+  email_sent: boolean;
+}> {
+  const response = await authorizedFetch(
+    `/api/admin/interviews/${payload.interview_id}/reschedule`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        new_proposed_slots: payload.new_proposed_slots,
+        format: payload.format,
+        location_or_link: payload.location_or_link,
+        interviewer_ids: payload.interviewer_ids,
+        notes: payload.notes,
+      }),
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function resendAdminInterviewInvite(interviewId: number): Promise<{
+  interview_id: number;
+  booking_token: string;
+  booking_url: string;
+  token_expires_at: string;
+  email_subject: string;
+  email_body: string;
+  email_sent: boolean;
+}> {
+  const response = await authorizedFetch(
+    `/api/admin/interviews/${interviewId}/resend-invite`,
+    {
+      method: "POST",
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function markAdminInterviewCompleted(interviewId: number): Promise<{ message: string }> {
+  const response = await authorizedFetch(
+    `/api/admin/interviews/${interviewId}/complete`,
+    {
+      method: "POST",
+    },
+    "ADMIN",
+  );
+  return response.json();
+}
+
+export async function fetchInterviewBookingByToken(bookingToken: string): Promise<BookingPortalInterview> {
+  const response = await fetch(`${API_BASE_URL}/api/interviews/booking/${bookingToken}`);
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.json();
+}
+
+export async function confirmInterviewBooking(
+  bookingToken: string,
+  payload: { selected_slot_start: string; selected_slot_end: string },
+): Promise<BookingConfirmResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/interviews/booking/${bookingToken}/confirm`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
   return response.json();
 }
 

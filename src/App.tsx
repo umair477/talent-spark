@@ -23,6 +23,7 @@ import EmployeeChatPage from "@/pages/EmployeeChatPage";
 import EmployeeLeavesPage from "@/pages/EmployeeLeavesPage";
 import PublicLandingPage from "@/pages/PublicLandingPage";
 import CandidateApplicationChatPage from "@/pages/CandidateApplicationChatPage";
+import InterviewBookingPage from "@/pages/InterviewBookingPage";
 import NotFound from "@/pages/NotFound";
 import { EmployeeAuthProvider } from "@/contexts/EmployeeAuthContext";
 import { useEmployeeAuth } from "@/hooks/use-employee-auth";
@@ -165,6 +166,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<PublicLandingPage />} />
             <Route path="/apply/:jobId" element={<CandidateApplicationChatPage />} />
+            <Route path="/schedule/:bookingToken" element={<InterviewBookingPage />} />
             <Route path="/employee/signup" element={<EmployeeSignupPage />} />
             <Route path="/employee/login" element={<EmployeeLoginPage />} />
             <Route element={<SessionGate />}>
