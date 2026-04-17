@@ -6,7 +6,10 @@ import {
   fetchEmployeeSession,
 } from "@/lib/api";
 import { EmployeeAuthContext } from "@/contexts/employee-auth-context";
-import { setEmployeeSessionActive } from "@/lib/employee-session";
+import {
+  setEmployeeSessionActive,
+  shouldAttemptEmployeeSessionBootstrap,
+} from "@/lib/employee-session";
 import type { EmployeeAuthProfile } from "@/lib/api";
 import type { EmployeeAuthContextValue } from "@/contexts/employee-auth-context";
 
@@ -81,6 +84,10 @@ export function EmployeeAuthProvider({ children }: { children: ReactNode }) {
   }, [applyEmployeeSession]);
 
   useEffect(() => {
+    if (!shouldAttemptEmployeeSessionBootstrap()) {
+      setIsLoading(false);
+      return () => clearLogoutTimer();
+    }
     void refreshSession();
     return () => clearLogoutTimer();
   }, [clearLogoutTimer, refreshSession]);
