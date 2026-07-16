@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CalendarCheck2, CalendarDays, CheckCircle2, Clock3, Globe, MapPin } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import {
   confirmInterviewBooking,
   fetchInterviewBookingByToken,
@@ -33,8 +33,19 @@ function statusBadgeClass(status: string) {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
+function normalizeBookingToken(rawValue: string): string {
+  const candidate = rawValue.trim().replace(/^[<[\](){},;.'"\s]+|[<[\](){},;.'"\s]+$/g, "");
+  const uuidMatch = candidate.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  return uuidMatch ? uuidMatch[0].toLowerCase() : candidate;
+}
+
 export default function InterviewBookingPage() {
-  const { bookingToken = "" } = useParams();
+  const { bookingToken: bookingTokenFromPath = "" } = useParams();
+  const location = useLocation();
+  const bookingToken = useMemo(() => {
+    const fromQuery = new URLSearchParams(location.search).get("token") ?? "";
+    return normalizeBookingToken(bookingTokenFromPath || fromQuery);
+  }, [bookingTokenFromPath, location.search]);
   const browserTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "Local", []);
 
   const [selectedSlot, setSelectedSlot] = useState<InterviewAvailableSlot | null>(null);

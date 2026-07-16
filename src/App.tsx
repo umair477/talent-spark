@@ -167,6 +167,7 @@ const App = () => (
             <Route path="/" element={<PublicLandingPage />} />
             <Route path="/apply/:jobId" element={<CandidateApplicationChatPage />} />
             <Route path="/schedule/:bookingToken" element={<InterviewBookingPage />} />
+            <Route path="/schedule" element={<InterviewBookingPage />} />
             <Route path="/employee/signup" element={<EmployeeSignupPage />} />
             <Route path="/employee/login" element={<EmployeeLoginPage />} />
             <Route element={<SessionGate />}>
