@@ -7,7 +7,9 @@ import {
 } from "@/lib/api";
 import { EmployeeAuthContext } from "@/contexts/employee-auth-context";
 import {
+  clearEmployeeSessionToken,
   setEmployeeSessionActive,
+  setEmployeeSessionToken,
   shouldAttemptEmployeeSessionBootstrap,
 } from "@/lib/employee-session";
 import type { EmployeeAuthProfile } from "@/lib/api";
@@ -43,6 +45,9 @@ export function EmployeeAuthProvider({ children }: { children: ReactNode }) {
   const applyEmployeeSession = useCallback((profile: EmployeeAuthProfile | null) => {
     setEmployee(profile);
     setEmployeeSessionActive(profile !== null);
+    if (profile === null) {
+      clearEmployeeSessionToken();
+    }
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -94,6 +99,7 @@ export function EmployeeAuthProvider({ children }: { children: ReactNode }) {
 
   const handleLogin = useCallback(async (payload: { email: string; password: string }) => {
     const response = await employeeLogin(payload);
+    setEmployeeSessionToken(response.access_token);
     applyEmployeeSession(response.employee);
     scheduleAutoLogout(response.access_token);
     return response.employee;

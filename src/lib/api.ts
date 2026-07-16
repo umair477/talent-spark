@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "@/lib/config";
 import { DemoRole, ensureDemoToken } from "@/lib/auth";
-import { isEmployeeSessionActive } from "@/lib/employee-session";
+import { getEmployeeSessionToken, isEmployeeSessionActive } from "@/lib/employee-session";
 
 export interface LeaveRequest {
   id: number;
@@ -404,8 +404,13 @@ async function parseError(response: Response): Promise<Error> {
 
 async function authorizedFetch(path: string, init?: RequestInit, role?: DemoRole) {
   if (!role && isEmployeeSessionActive()) {
+    const employeeToken = getEmployeeSessionToken();
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        ...(employeeToken ? { Authorization: `Bearer ${employeeToken}` } : {}),
+      },
       credentials: "include",
     });
     if (!response.ok) {
